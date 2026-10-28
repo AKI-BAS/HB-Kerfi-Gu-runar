@@ -146,6 +146,12 @@ h2{font-family:var(--body);font-weight:600;font-size:13px;letter-spacing:.16em;t
     <div class="row" style="margin-top:8px">
       <button class="accent" id="btnEdit" style="flex:1">Breyta</button>
       <button class="primary" id="btnSave" hidden>Vista kerfi</button>
+      <button id="btnDelTeam" hidden>Eyða</button>
+    </div>
+    <div class="sheet" id="delSheet" hidden>
+      <label for="delPw">Lykilorð til að eyða kerfinu úr safni liðsins</label>
+      <input id="delPw" type="password" autocomplete="off" enterkeyhint="done">
+      <div class="row"><button class="primary" id="btnDelConfirm" style="background:var(--red);color:#fff">Eyða kerfi</button><button id="btnDelCancel">Hætta við</button></div>
     </div>
 
 
@@ -373,7 +379,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{const c=e.target.closest&&e.target.closest('[data-open]');if(c&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openDiagram(find(c.dataset.open),false)}});
 
 function openDiagram(d,edit){
-  stop(); S.cur=d; S.frame=0; S.edit=!!edit; S.sel=null;
+  stop(); S.cur=d; S.frame=0; S.edit=!!edit; S.sel=null; $('#delSheet').hidden=true; $('#delPw').value='';
   show('board'); renderBoard();
 }
 function renderBoard(){
@@ -384,6 +390,7 @@ function renderBoard(){
   $('#btnPlay').disabled=n<2;
   $('#btnEdit').textContent=isDraft(d)&&S.edit?'Klára':'Breyta';
   $('#btnSave').hidden=!isDraft(d)||!online;
+  $('#btnDelTeam').hidden=!(d.team&&online);
   $('#editPanel').hidden=!S.edit;
   svg.classList.toggle('editing',S.edit);
   if(S.edit){
@@ -528,6 +535,25 @@ $('#btnSave').onclick=async()=>{
     openDiagram(saved,false); toast('Kerfi vistað í safn liðsins');
   }catch(e){toast('Tókst ekki að vista. Athugaðu netsambandið og reyndu aftur. Uppkastið er geymt.')}
   finally{b.disabled=false;b.textContent='Vista kerfi'}
+};
+
+$('#btnDelTeam').onclick=()=>{$('#delSheet').hidden=false;$('#delPw').value='';$('#delPw').focus()};
+$('#btnDelCancel').onclick=()=>{$('#delSheet').hidden=true;$('#delPw').value=''};
+$('#delPw').addEventListener('keydown',e=>{if(e.key==='Enter')$('#btnDelConfirm').click()});
+$('#btnDelConfirm').onclick=async()=>{
+  const d=S.cur; if(!d||!d.team) return;
+  const pw=$('#delPw').value; if(!pw){toast('Sláðu inn lykilorðið.');return}
+  const b=$('#btnDelConfirm'); b.disabled=true;
+  try{
+    const r=await fetch(CFG.url+'/rest/v1/rpc/delete_kerfi',{method:'POST',headers:headers({'Content-Type':'application/json'}),
+      body:JSON.stringify({kerfi_id:d.id.slice(1),pw})});
+    if(!r.ok) throw new Error(r.status);
+    if(await r.json()!==true){toast('Rangt lykilorð.');return}
+    team=team.filter(x=>x.id!==d.id);
+    try{localStorage.setItem(TEAMKEY,JSON.stringify(team))}catch(e){}
+    stop(); S.cur=null; renderLib(); show('lib'); toast('Kerfi eytt úr safni liðsins');
+  }catch(e){toast('Tókst ekki að eyða. Athugaðu netsambandið og reyndu aftur.')}
+  finally{b.disabled=false}
 };
 
 let tt=0;
